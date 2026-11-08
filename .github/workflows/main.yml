@@ -1,0 +1,87 @@
+name: Merge and Health-check V2Ray Subscriptions
+
+on:
+  schedule:
+    - cron: '0 */1 * * *'  # runs every hour
+  workflow_dispatch:        # allows manual trigger from GitHub UI
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # needed to push configs/healthy.txt back to the repo
+    env:
+      BASE_URLS: ${{ secrets.BASE_URLS }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch and merge all subscriptions
+        run: |
+          if [ -z "$BASE_URLS" ]; then
+            echo "::error::The BASE_URLS secret is empty or not set. See README for setup."
+            exit 1
+          fi
+
+          echo "Reading URLs from the BASE_URLS secret..."
+          > all.txt   # clear / create temp merged file (not committed)
+
+          while IFS= read -r url || [ -n "$url" ]; do
+            # skip empty lines and comments
+            [[ -z "$url" || "$url" == \#* ]] && continue
+
+            echo "Fetching: $url"
+            content=$(curl -fsSL --max-time 30 "$url" 2>/dev/null)
+
+            if [ $? -eq 0 ] && [ -n "$content" ]; then
+              echo "$content" >> all.txt
+              echo "  ✓ OK"
+            else
+              echo "  ✗ Failed or empty — skipping"
+            fi
+          done <<< "$BASE_URLS"
+
+          total=$(wc -l < all.txt)
+          echo ""
+          echo "Done. Total lines in all.txt: $total"
+
+      - name: Download xray-knife
+        run: |
+          curl -fsSL -o xray-knife.zip \
+            https://github.com/lilendian0x00/xray-knife/releases/latest/download/Xray-knife-linux-64.zip
+          unzip -o xray-knife.zip
+          chmod +x xray-knife
+
+      - name: Health-check configs and write configs/healthy.txt
+        run: |
+          mkdir -p configs
+
+          # --prescan does a fast liveness check first so dead configs are
+          # dropped quickly, before the slower full connection test runs.
+          # --mdelay 250 keeps only configs with a real ping under 250ms.
+          ./xray-knife http \
+            -f all.txt \
+            -o configs/healthy.txt \
+            --prescan \
+            --prescan-workers 300 \
+            --mdelay 250 \
+            -v || true
+
+          if [ ! -f configs/healthy.txt ]; then
+            echo "No healthy configs produced — writing an empty file."
+            > configs/healthy.txt
+          fi
+
+          total=$(wc -l < configs/healthy.txt)
+          echo "Healthy configs: $total"
+
+      - name: Commit and push configs/healthy.txt
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add configs/healthy.txt
+          # only commit if there are actual changes
+          git diff --cached --quiet && echo "No changes — skipping commit." || \
+            git commit -m "chore: update configs/healthy.txt [$(date -u +'%Y-%m-%d %H:%M UTC')]"
+          git push
