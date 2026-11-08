@@ -1,0 +1,7 @@
+# local test artifacts — never commit these
+base.txt
+all.txt
+xray-knife
+xray-knife.zip
+Xray-knife-linux/
+*.log
