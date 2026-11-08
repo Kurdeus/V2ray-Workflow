@@ -2,7 +2,7 @@ name: Merge and Health-check V2Ray Subscriptions
 
 on:
   schedule:
-     - cron: '*/15 * * * *'
+     - cron: '0 */1 * * *'
   workflow_dispatch:        # allows manual trigger from GitHub UI
 
 jobs:
