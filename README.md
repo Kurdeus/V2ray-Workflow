@@ -9,10 +9,10 @@ ready-to-use subscription file — automatically, on a schedule, via GitHub Acti
 **Subscription link (import this in your client):**
 
 ```
-https://raw.githubusercontent.com/<YOUR-USERNAME>/V2ray-Workflow/main/configs/healthy.txt
+https://raw.githubusercontent.com/Kurdeus/V2ray-Workflow/main/configs/healthy.txt
 ```
 
-Replace `<YOUR-USERNAME>` with your actual GitHub username once you've created the repo.
+Replace `Kurdeus` with your actual GitHub username once you've created the repo.
 
 ## How it works
 
@@ -79,7 +79,7 @@ MIT — see [LICENSE](LICENSE).
 ‏لینک ساب‌اسکریپشن (برای وارد کردن در کلاینت):
 
 ```
-https://raw.githubusercontent.com/<YOUR-USERNAME>/V2ray-Workflow/main/configs/healthy.txt
+https://raw.githubusercontent.com/Kurdeus/V2ray-Workflow/main/configs/healthy.txt
 ```
 
 ‏به‌جای `<«⁠⁦YOUR-USERNAME⁩⁠»>` نام کاربری واقعی گیت‌هاب خودت را بگذار.
