@@ -2,7 +2,7 @@ name: Merge and Health-check V2Ray Subscriptions
 
 on:
   schedule:
-     - cron: '0 */1 * * *'
+    - cron: '0 */1 * * *'  # runs every hour
   workflow_dispatch:        # allows manual trigger from GitHub UI
 
 jobs:
@@ -53,28 +53,62 @@ jobs:
           unzip -o xray-knife.zip
           chmod +x xray-knife
 
-      - name: Health-check configs and write configs/healthy.txt
+      - name: Stage 1 - keep configs with ping under 300ms
+        run: |
+          # --prescan does a fast liveness check first so dead configs are
+          # dropped quickly, before the slower full connection test runs.
+          # --mdelay 300 keeps only configs with a real ping under 300ms.
+          ./xray-knife http \
+            -f all.txt \
+            -o stage1.txt \
+            --prescan \
+            --prescan-workers 300 \
+            --mdelay 300 \
+            -v || true
+
+          if [ ! -f stage1.txt ]; then
+            echo "No configs passed the ping filter — writing an empty file."
+            > stage1.txt
+          fi
+
+          total=$(wc -l < stage1.txt)
+          echo "Configs under 300ms: $total"
+
+      - name: Stage 2 - speed test survivors and keep the top 100
         run: |
           mkdir -p configs
 
-          # --prescan does a fast liveness check first so dead configs are
-          # dropped quickly, before the slower full connection test runs.
-          # --mdelay 250 keeps only configs with a real ping under 250ms.
-          ./xray-knife http \
-            -f all.txt \
-            -o configs/healthy.txt \
-            --prescan \
-            --prescan-workers 300 \
-            --mdelay 250 \
-            -v || true
-
-          if [ ! -f configs/healthy.txt ]; then
-            echo "No healthy configs produced — writing an empty file."
+          if [ ! -s stage1.txt ]; then
+            echo "No configs to speed-test — writing an empty configs/healthy.txt."
             > configs/healthy.txt
+            exit 0
           fi
 
+          # -S runs a real download/upload test (speed.cloudflare.com) on each
+          # survivor. jsonl output carries the measured speed per config so we
+          # can rank by it afterwards.
+          ./xray-knife http \
+            -f stage1.txt \
+            -o stage2.jsonl \
+            -x jsonl \
+            -S \
+            -v || true
+
+          if [ ! -f stage2.jsonl ]; then
+            echo "Speed test produced no results — writing an empty configs/healthy.txt."
+            > configs/healthy.txt
+            exit 0
+          fi
+
+          # keep only configs that actually passed, rank by download speed
+          # (highest first), take the top 100, and write just the links.
+          jq -r 'select(.status=="passed") | [.download, .link] | @tsv' stage2.jsonl \
+            | sort -t$'\t' -k1,1 -rn \
+            | head -n 100 \
+            | cut -f2- > configs/healthy.txt
+
           total=$(wc -l < configs/healthy.txt)
-          echo "Healthy configs: $total"
+          echo "Top configs by speed kept: $total"
 
       - name: Commit and push configs/healthy.txt
         run: |
