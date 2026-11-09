@@ -48,7 +48,14 @@ jobs:
 
       - name: Download xray-knife
         run: |
-          curl -fsSL -o xray-knife.zip \
+          # --retry handles transient errors (e.g. GitHub's release CDN
+          # occasionally returns a 504) by retrying with backoff instead of
+          # failing the whole job on one bad request.
+          curl -fsSL \
+            --retry 5 \
+            --retry-all-errors \
+            --retry-delay 5 \
+            -o xray-knife.zip \
             https://github.com/lilendian0x00/xray-knife/releases/latest/download/Xray-knife-linux-64.zip
           unzip -o xray-knife.zip
           chmod +x xray-knife
