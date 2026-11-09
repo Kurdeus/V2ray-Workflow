@@ -69,7 +69,7 @@ jobs:
             -f all.txt \
             -o stage1.txt \
             --prescan \
-            --prescan-workers 300 \
+            --prescan-workers 30 \
             --mdelay 300 \
             -v || true
 
