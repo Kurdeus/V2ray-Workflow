@@ -17,34 +17,76 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+
       - name: Fetch and merge all subscriptions
+        shell: bash
         run: |
+          set -uo pipefail
+
           if [ -z "$BASE_URLS" ]; then
-            echo "::error::The BASE_URLS secret is empty or not set. See README for setup."
+            echo "::error::BASE_URLS secret is empty."
             exit 1
           fi
 
-          echo "Reading URLs from the BASE_URLS secret..."
-          > all.txt   # clear / create temp merged file (not committed)
+          echo "Reading URLs from BASE_URLS..."
+          > all.txt
+
+          success=0
+          failed=0
+          empty=0
 
           while IFS= read -r url || [ -n "$url" ]; do
-            # skip empty lines and comments
+            # Remove Windows CRLF characters
+            url="${url%$'\r'}"
+
+            # Skip empty lines and comments
             [[ -z "$url" || "$url" == \#* ]] && continue
 
-            echo "Fetching: $url"
-            content=$(curl -fsSL --max-time 30 "$url" 2>/dev/null)
+            echo "Fetching subscription..."
 
-            if [ $? -eq 0 ] && [ -n "$content" ]; then
-              echo "$content" >> all.txt
-              echo "  ✓ OK"
+            # IMPORTANT: use if to prevent curl errors from stopping the job
+            if content=$(curl -fsSL \
+                --connect-timeout 10 \
+                --max-time 45 \
+                --retry 2 \
+                --retry-delay 3 \
+                "$url" 2>/dev/null); then
+
+              if [ -n "$content" ]; then
+                printf '%s\n' "$content" >> all.txt
+                ((success+=1))
+                echo "  ✓ OK"
+              else
+                ((empty+=1))
+                echo "  ⚠ Empty response — skipped"
+              fi
             else
-              echo "  ✗ Failed or empty — skipping"
+              ((failed+=1))
+              echo "  ✗ Invalid or unreachable URL — skipped"
             fi
+
           done <<< "$BASE_URLS"
 
-          total=$(wc -l < all.txt)
           echo ""
-          echo "Done. Total lines in all.txt: $total"
+          echo "========== FETCH SUMMARY =========="
+          echo "Successful sources: $success"
+          echo "Failed sources:     $failed"
+          echo "Empty sources:      $empty"
+          echo "Total configs:      $(wc -l < all.txt)"
+          echo "==================================="
+
+          {
+            echo "### Subscription Fetch Report"
+            echo "- Successful: $success"
+            echo "- Failed: $failed"
+            echo "- Empty: $empty"
+            echo "- Config lines: $(wc -l < all.txt)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ ! -s all.txt ]; then
+            echo "::error::No configurations were downloaded from any source."
+            exit 1
+          fi
 
       - name: Download xray-knife
         run: |
