@@ -113,6 +113,7 @@ jobs:
             --prescan \
             --prescan-workers 30 \
             --mdelay 300 \
+            -u "https://www.google.com/generate_204" \
             -v || true
 
           if [ ! -f stage1.txt ]; then
@@ -141,6 +142,7 @@ jobs:
             -o stage2.jsonl \
             -x jsonl \
             -S \
+            -u "https://www.google.com/generate_204" \
             -v || true
 
           if [ ! -f stage2.jsonl ]; then
